@@ -1,0 +1,18 @@
+node_modules
+# Keep environment variables out of version control
+.env
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+
+# Generated Prisma client
+/generated/prisma
+
+# Test files
+test-*.js
+test-*.ts

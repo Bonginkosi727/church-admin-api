@@ -1,0 +1,461 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// Enhanced schema with comprehensive church management models
+
+model User {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  name        String
+  password    String
+  phone       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  isActive    Boolean  @default(true)
+  lastLogin   DateTime?
+  
+  // Relations
+  memberProfile     Member?
+  roles            UserRole[]
+  ledCells         Cell[]             @relation("CellLeader")
+  ledMinistries    Ministry[]         @relation("MinistryLeader")
+  eventRsvps       EventRsvp[]
+  readAnnouncements AnnouncementRead[]
+  createdEvents    Event[]            @relation("EventCreator")
+  createdAnnouncements Announcement[] @relation("AnnouncementCreator")
+  activities       Activity[]
+
+  @@map("users")
+}
+
+model Role {
+  id          String     @id @default(uuid())
+  name        String     @unique
+  description String?
+  permissions String?    @db.Text // JSON string of permissions
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  
+  // Relations
+  users       UserRole[]
+
+  @@map("roles")
+}
+
+model UserRole {
+  id     String @id @default(uuid())
+  userId String
+  roleId String
+  
+  // Relations
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+model Member {
+  id          String   @id @default(uuid())
+  name        String
+  email       String?  @unique
+  phone       String?
+  age         Int?
+  gender      Gender?
+  address     String?  @db.Text
+  cellId      String?
+  userId      String?  @unique
+  isActive    Boolean  @default(true)
+  joinDate    DateTime @default(now())
+  birthDate   DateTime?
+  occupation  String?
+  notes       String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  user         User?              @relation(fields: [userId], references: [id])
+  cell         Cell?              @relation(fields: [cellId], references: [id])
+  ministries   MemberMinistry[]
+  contributions Contribution[]
+  attendances  Attendance[]
+
+  @@index([cellId])
+  @@index([email])
+  @@map("members")
+}
+
+model Ministry {
+  id          String       @id @default(uuid())
+  name        String       @unique
+  type        MinistryType
+  description String?      @db.Text
+  leaderId    String?
+  status      Status       @default(ACTIVE)
+  meetingDay  String?
+  meetingTime String?
+  location    String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  
+  // Relations
+  leader      User?            @relation("MinistryLeader", fields: [leaderId], references: [id])
+  members     MemberMinistry[]
+  events      Event[]
+
+  @@index([leaderId])
+  @@index([type])
+  @@map("ministries")
+}
+
+model MemberMinistry {
+  id         String   @id @default(uuid())
+  memberId   String
+  ministryId String
+  role       String?  @default("member")
+  joinDate   DateTime @default(now())
+  isActive   Boolean  @default(true)
+  
+  // Relations
+  member     Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  ministry   Ministry @relation(fields: [ministryId], references: [id], onDelete: Cascade)
+
+  @@unique([memberId, ministryId])
+  @@map("member_ministries")
+}
+
+model Cell {
+  id          String   @id @default(uuid())
+  name        String
+  number      String?
+  leaderId    String
+  location    String?
+  meetingDay  String?
+  meetingTime String?
+  description String?  @db.Text
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  leader      User     @relation("CellLeader", fields: [leaderId], references: [id])
+  members     Member[]
+  meetings    CellMeeting[]
+
+  @@index([leaderId])
+  @@map("cells")
+}
+
+model CellMeeting {
+  id          String   @id @default(uuid())
+  cellId      String
+  date        DateTime
+  topic       String?
+  attendance  Int      @default(0)
+  notes       String?  @db.Text
+  createdAt   DateTime @default(now())
+  
+  // Relations
+  cell        Cell     @relation(fields: [cellId], references: [id], onDelete: Cascade)
+
+  @@index([cellId, date])
+  @@map("cell_meetings")
+}
+
+model Event {
+  id          String      @id @default(uuid())
+  title       String
+  description String?     @db.Text
+  date        DateTime
+  endDate     DateTime?
+  location    String?
+  type        EventType   @default(SERVICE)
+  status      EventStatus @default(SCHEDULED)
+  capacity    Int?
+  isPublic    Boolean     @default(true)
+  ministryId  String?
+  createdBy   String
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  
+  // Relations
+  creator     User        @relation("EventCreator", fields: [createdBy], references: [id])
+  ministry    Ministry?   @relation(fields: [ministryId], references: [id])
+  rsvps       EventRsvp[]
+  attendances Attendance[]
+
+  @@index([date])
+  @@index([createdBy])
+  @@index([ministryId])
+  @@map("events")
+}
+
+model EventRsvp {
+  id        String     @id @default(uuid())
+  eventId   String
+  userId    String
+  status    RsvpStatus
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  
+  // Relations
+  event     Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@map("event_rsvps")
+}
+
+model Attendance {
+  id        String   @id @default(uuid())
+  eventId   String?
+  memberId  String
+  date      DateTime
+  status    AttendanceStatus @default(PRESENT)
+  notes     String?
+  createdAt DateTime @default(now())
+  
+  // Relations
+  event     Event?   @relation(fields: [eventId], references: [id])
+  member    Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([date])
+  @@index([memberId])
+  @@map("attendances")
+}
+
+model Announcement {
+  id          String             @id @default(uuid())
+  title       String
+  content     String             @db.Text
+  type        AnnouncementType   @default(GENERAL)
+  priority    Priority           @default(NORMAL)
+  startDate   DateTime           @default(now())
+  endDate     DateTime
+  isActive    Boolean            @default(true)
+  targetRoles String?            @db.Text // JSON array of role IDs
+  createdBy   String
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  
+  // Relations
+  creator     User               @relation("AnnouncementCreator", fields: [createdBy], references: [id])
+  readBy      AnnouncementRead[]
+
+  @@index([startDate, endDate])
+  @@index([createdBy])
+  @@map("announcements")
+}
+
+model AnnouncementRead {
+  id             String       @id @default(uuid())
+  announcementId String
+  userId         String
+  readAt         DateTime     @default(now())
+  
+  // Relations
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([announcementId, userId])
+  @@map("announcement_reads")
+}
+
+model Contribution {
+  id          String           @id @default(uuid())
+  amount      Decimal          @db.Decimal(10, 2)
+  type        ContributionType
+  category    String?
+  description String?
+  date        DateTime
+  memberId    String?
+  method      PaymentMethod    @default(CASH)
+  reference   String?
+  isVerified  Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  
+  // Relations
+  member      Member?          @relation(fields: [memberId], references: [id])
+
+  @@index([date])
+  @@index([type])
+  @@index([memberId])
+  @@map("contributions")
+}
+
+model Asset {
+  id          String      @id @default(uuid())
+  name        String
+  description String?     @db.Text
+  category    String
+  value       Decimal?    @db.Decimal(10, 2)
+  condition   AssetCondition @default(GOOD)
+  location    String?
+  purchaseDate DateTime?
+  lastMaintenance DateTime?
+  status      AssetStatus @default(ACTIVE)
+  assignedTo  String?
+  notes       String?     @db.Text
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([category])
+  @@index([status])
+  @@map("assets")
+}
+
+model Activity {
+  id          String       @id @default(uuid())
+  type        ActivityType
+  title       String
+  description String?      @db.Text
+  entityId    String?      // ID of related entity (member, event, etc.)
+  entityType  String?      // Type of entity (member, event, etc.)
+  userId      String
+  metadata    String?      @db.Text // JSON string for additional data
+  createdAt   DateTime     @default(now())
+  
+  // Relations
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([type])
+  @@map("activities")
+}
+
+// Enums
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum Status {
+  ACTIVE
+  INACTIVE
+}
+
+enum MinistryType {
+  YOUTH
+  CHILDREN
+  WOMEN
+  MEN
+  MUSIC
+  USHERS
+  MEDIA
+  EVANGELISM
+  PRAYER
+  WORSHIP
+  FINANCE
+  ADMINISTRATION
+}
+
+enum EventType {
+  SERVICE
+  MEETING
+  OUTREACH
+  CONFERENCE
+  SOCIAL
+  TRAINING
+  PRAYER
+  WORSHIP
+  FELLOWSHIP
+}
+
+enum EventStatus {
+  SCHEDULED
+  ONGOING
+  COMPLETED
+  CANCELLED
+  POSTPONED
+}
+
+enum RsvpStatus {
+  ATTENDING
+  MAYBE
+  NOT_ATTENDING
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum ContributionType {
+  TITHE
+  OFFERING
+  PLEDGE
+  DONATION
+  BUILDING_FUND
+  SPECIAL_COLLECTION
+  MISSIONS
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  MOBILE_MONEY
+  CARD
+  CHECK
+}
+
+enum AnnouncementType {
+  GENERAL
+  URGENT
+  EVENT
+  MINISTRY
+  ADMINISTRATIVE
+}
+
+enum Priority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum AssetCondition {
+  EXCELLENT
+  GOOD
+  FAIR
+  POOR
+  DAMAGED
+}
+
+enum AssetStatus {
+  ACTIVE
+  INACTIVE
+  MAINTENANCE
+  DISPOSED
+}
+
+enum ActivityType {
+  MEMBER_CREATED
+  MEMBER_UPDATED
+  MEMBER_DELETED
+  EVENT_CREATED
+  EVENT_UPDATED
+  ANNOUNCEMENT_CREATED
+  CONTRIBUTION_ADDED
+  MINISTRY_CREATED
+  USER_LOGIN
+  USER_LOGOUT
+  SYSTEM
+}
